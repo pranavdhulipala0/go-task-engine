@@ -13,6 +13,7 @@ type TaskManager struct {
 	ctx          context.Context
 	cancel       context.CancelFunc
 	PendingTasks map[string]Task
+	FailedTasks  map[string]Task
 	Mu           sync.RWMutex
 }
 
@@ -22,6 +23,7 @@ func NewTaskManager(ctx context.Context, cancel context.CancelFunc, workers int)
 		cancel:       cancel,
 		TaskQueue:    make(chan Task),
 		PendingTasks: make(map[string]Task),
+		FailedTasks:  make(map[string]Task),
 		Mu:           sync.RWMutex{},
 	}
 
@@ -37,9 +39,7 @@ func (tm *TaskManager) Submit(task Task) string {
 	tm.TaskWg.Add(1) // increment BEFORE sending
 	select {
 	case tm.TaskQueue <- task:
-		tm.Mu.Lock()
-		tm.PendingTasks[task.ID] = task
-		tm.Mu.Unlock()
+		tm.AddTaskToQueue(task, tm.PendingTasks)
 		fmt.Println("✅ Submitted Task:", task.ID)
 		return task.ID
 	case <-tm.ctx.Done():
@@ -91,6 +91,8 @@ func (tm *TaskManager) Worker(ctx context.Context, workerId int, queue chan Task
 }
 
 func (tm *TaskManager) ExecuteTask(ctx context.Context, task Task) {
+	//Mark this task as done at the end of this execution
+	defer tm.TaskWg.Done()
 
 	//Lock and check if the task exists.
 	tm.Mu.Lock()
@@ -119,15 +121,37 @@ func (tm *TaskManager) ExecuteTask(ctx context.Context, task Task) {
 	select {
 	case err := <-done:
 		if err != nil {
+			//Retry the Task if it has not reached the max retries
+			if task.Retries < task.MaxRetries {
+				task.Retries++
+				tm.Submit(task)
+				return
+			}
+			tm.AddTaskToQueue(task, tm.FailedTasks)
 			fmt.Println("🔥 Task failed:", task.ID, err)
 		} else {
 			fmt.Println("✅ Task completed:", task.ID)
 		}
 
 	case <-taskCtx.Done():
+		//Retry the Task if it has not reached the max retries
+		if task.Retries < task.MaxRetries {
+			tm.RetryTask(task)
+			return
+		}
+		tm.AddTaskToQueue(task, tm.FailedTasks)
 		fmt.Println("⏰ Task timed out:", task.ID)
 	}
+}
 
-	//Mark this task as done
-	tm.TaskWg.Done()
+func (tm *TaskManager) RetryTask(task Task) {
+	task.Retries++
+	fmt.Println("😩 Retrying task:", task.ID, "for the ", task.Retries, "time")
+	tm.Submit(task)
+}
+
+func (tm *TaskManager) AddTaskToQueue(task Task, queue map[string]Task) {
+	tm.Mu.Lock()
+	queue[task.ID] = task
+	tm.Mu.Unlock()
 }
