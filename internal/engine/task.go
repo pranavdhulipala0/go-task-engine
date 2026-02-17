@@ -1,9 +1,12 @@
 package engine
 
-import "time"
+import (
+	"context"
+	"time"
+)
 
 type Task struct {
 	ID       string
 	Duration time.Duration
-	Execute  func() error
+	Execute  func(context.Context) error
 }

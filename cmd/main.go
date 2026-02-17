@@ -3,7 +3,6 @@ package main
 import (
 	"context"
 	"fmt"
-	"math/rand"
 	"time"
 
 	"github.com/pranavdhulipala/go-task-engine/internal/engine"
@@ -12,6 +11,7 @@ import (
 func main() {
 	fmt.Println("Task engine starting...")
 	time.Sleep(2 * time.Second)
+	startTime := time.Now()
 	ctx, cancel := context.WithCancel(context.Background())
 
 	tm := engine.NewTaskManager(ctx, cancel, 5)
@@ -19,34 +19,58 @@ func main() {
 	tasks := []engine.Task{
 		{
 			ID: "A",
-			Execute: func() error {
-				time.Sleep(time.Duration(rand.Intn(500)) * time.Millisecond)
-				fmt.Println("Executing task A")
-				return nil
+			Execute: func(ctx context.Context) error {
+				for {
+					select {
+					case <-ctx.Done():
+						return ctx.Err()
+					default:
+						time.Sleep(500 * time.Millisecond)
+						fmt.Println("Executing task A")
+					}
+				}
 			},
 		},
 		{
 			ID: "B",
-			Execute: func() error {
-				time.Sleep(time.Duration(rand.Intn(500)) * time.Millisecond)
-				fmt.Println("Executing task B")
-				return nil
+			Execute: func(ctx context.Context) error {
+				for {
+					select {
+					case <-ctx.Done():
+						return ctx.Err()
+					default:
+						time.Sleep(500 * time.Millisecond)
+						fmt.Println("Executing task B")
+					}
+				}
 			},
 		},
 		{
 			ID: "C",
-			Execute: func() error {
-				time.Sleep(time.Duration(rand.Intn(500)) * time.Millisecond)
-				fmt.Println("Executing task C")
-				return nil
+			Execute: func(ctx context.Context) error {
+				for {
+					select {
+					case <-ctx.Done():
+						return ctx.Err()
+					default:
+						time.Sleep(100000 * time.Millisecond)
+						fmt.Println("Executing task C")
+					}
+				}
 			},
 		},
 		{
 			ID: "D",
-			Execute: func() error {
-				time.Sleep(time.Duration(rand.Intn(500)) * time.Millisecond)
-				fmt.Println("Executing task D")
-				return nil
+			Execute: func(ctx context.Context) error {
+				for {
+					select {
+					case <-ctx.Done():
+						return ctx.Err()
+					default:
+						time.Sleep(500 * time.Millisecond)
+						fmt.Println("Executing task D")
+					}
+				}
 			},
 		},
 	}
@@ -57,8 +81,10 @@ func main() {
 		tm.Submit(t)
 	}
 
-	tm.Cancel("C")
-	tm.Cancel("X")
+	// tm.Cancel("C")
+	// tm.Cancel("X")
 
 	tm.Shutdown()
+	endTime := time.Now()
+	fmt.Println("⏰ Total time taken:", endTime.Sub(startTime))
 }

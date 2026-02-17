@@ -81,22 +81,53 @@ func (tm *TaskManager) Worker(ctx context.Context, workerId int, queue chan Task
 				fmt.Println("🔌 Channel closed, worker", workerId, "shutting down")
 				return
 			}
-			tm.Mu.RLock()
-			_, exists := tm.PendingTasks[task.ID]
-			tm.Mu.RUnlock()
-			if !exists { // task already cancelled or executed
-				fmt.Println("❌ Task already executed or cancelled:", task.ID)
-				continue
-			}
-			// fmt.Println("⚡ Worker:", workerId, "executed task", task.ID)
-			task.Execute()
-			tm.Mu.Lock()
-			delete(tm.PendingTasks, task.ID)
-			tm.Mu.Unlock()
-			tm.TaskWg.Done() // mark this task as done
+			tm.ExecuteTask(ctx, task)
+
 		case <-tm.ctx.Done():
 			fmt.Println("💤 Worker", workerId, "shutting down")
 			return
 		}
 	}
+}
+
+func (tm *TaskManager) ExecuteTask(ctx context.Context, task Task) {
+
+	//Lock and check if the task exists.
+	tm.Mu.Lock()
+	_, exists := tm.PendingTasks[task.ID]
+	if !exists { // task already cancelled or executed
+		fmt.Println("❌ Task already executed or cancelled:", task.ID)
+		tm.Mu.Unlock()
+		return
+	}
+	delete(tm.PendingTasks, task.ID)
+	tm.Mu.Unlock()
+
+	//Create a Timeout Context for the Task.
+	taskCtx, cancel := context.WithTimeout(ctx, task.Duration)
+	defer cancel()
+
+	//Create a buffered channel to store status of the task execution
+	done := make(chan error, 1)
+
+	//Run the function in a Go Routine
+	go func() {
+		done <- task.Execute(taskCtx)
+	}()
+
+	//Listen to the Status Channel for each Task -> If the task fails, print the error, if it times out, print timeout error
+	select {
+	case err := <-done:
+		if err != nil {
+			fmt.Println("🔥 Task failed:", task.ID, err)
+		} else {
+			fmt.Println("✅ Task completed:", task.ID)
+		}
+
+	case <-taskCtx.Done():
+		fmt.Println("⏰ Task timed out:", task.ID)
+	}
+
+	//Mark this task as done
+	tm.TaskWg.Done()
 }
