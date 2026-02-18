@@ -6,16 +6,18 @@ import (
 
 	"github.com/google/uuid"
 	"github.com/sirupsen/logrus"
+
+	"github.com/pranavdhulipala/go-task-engine/internal/models"
 )
 
 type TaskManager struct {
-	TaskQueue      chan Task
+	TaskQueue      chan models.Task
 	Wg             sync.WaitGroup
 	TaskWg         sync.WaitGroup
 	ctx            context.Context
 	cancel         context.CancelFunc
-	PendingTasks   map[string]Task
-	FailedTasks    map[string]Task
+	PendingTasks   map[string]models.Task
+	FailedTasks    map[string]models.Task
 	Mu             sync.RWMutex
 	executingTasks sync.Map // map[string]*sync.Once
 }
@@ -27,9 +29,9 @@ func NewTaskManager(ctx context.Context, cancel context.CancelFunc, workers int)
 	tm := &TaskManager{
 		ctx:          ctx,
 		cancel:       cancel,
-		TaskQueue:    make(chan Task),
-		PendingTasks: make(map[string]Task),
-		FailedTasks:  make(map[string]Task),
+		TaskQueue:    make(chan models.Task),
+		PendingTasks: make(map[string]models.Task),
+		FailedTasks:  make(map[string]models.Task),
 		Mu:           sync.RWMutex{},
 	}
 
@@ -41,7 +43,7 @@ func NewTaskManager(ctx context.Context, cancel context.CancelFunc, workers int)
 	return tm
 }
 
-func (tm *TaskManager) Submit(task Task) string {
+func (tm *TaskManager) Submit(task models.Task) string {
 	// Generate ExecutionId before sending to channel
 	task.ExecutionId = uuid.New().String()
 
@@ -82,7 +84,7 @@ func (tm *TaskManager) Shutdown() {
 	logrus.Info("🛑 Task Manager shutting down")
 }
 
-func (tm *TaskManager) Worker(ctx context.Context, workerId int, queue chan Task, wg *sync.WaitGroup) {
+func (tm *TaskManager) Worker(ctx context.Context, workerId int, queue chan models.Task, wg *sync.WaitGroup) {
 	defer wg.Done()
 	logrus.WithField("workerId", workerId).Info("🚀 Worker started")
 
@@ -102,7 +104,7 @@ func (tm *TaskManager) Worker(ctx context.Context, workerId int, queue chan Task
 	}
 }
 
-func (tm *TaskManager) ExecuteTask(ctx context.Context, task Task, workerId int) {
+func (tm *TaskManager) ExecuteTask(ctx context.Context, task models.Task, workerId int) {
 	//Mark this task as done at the end of this execution
 	defer tm.TaskWg.Done()
 
@@ -171,7 +173,7 @@ func (tm *TaskManager) ExecuteTask(ctx context.Context, task Task, workerId int)
 	})
 }
 
-func (tm *TaskManager) RetryTask(task Task) {
+func (tm *TaskManager) RetryTask(task models.Task) {
 	task.Retries++
 	logrus.WithFields(logrus.Fields{
 		"taskId":     task.ID,
@@ -181,7 +183,7 @@ func (tm *TaskManager) RetryTask(task Task) {
 	tm.Submit(task) // This will get a NEW ExecutionId
 }
 
-func (tm *TaskManager) AddTaskToQueue(task Task, queue map[string]Task) {
+func (tm *TaskManager) AddTaskToQueue(task models.Task, queue map[string]models.Task) {
 	tm.Mu.Lock()
 	queue[task.ID] = task
 	tm.Mu.Unlock()

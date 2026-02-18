@@ -1,4 +1,4 @@
-package engine
+package utils
 
 import (
 	"context"
@@ -6,12 +6,14 @@ import (
 	"net/http"
 	"sync"
 	"time"
+
+	"github.com/pranavdhulipala/go-task-engine/internal/models"
 )
 
-func GenerateTasks(responses *[]string) []Task {
+func GenerateTasks(responses *[]string) []models.Task {
 	var mu sync.Mutex // Mutex to protect slice access
 
-	return []Task{
+	return []models.Task{
 		{
 			ID:         "A",
 			Duration:   5 * time.Second,

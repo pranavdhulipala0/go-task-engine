@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"github.com/pranavdhulipala/go-task-engine/internal/engine"
+	"github.com/pranavdhulipala/go-task-engine/internal/utils"
 )
 
 func main() {
@@ -16,7 +17,7 @@ func main() {
 	responses := make([]string, 0)
 
 	tm := engine.NewTaskManager(ctx, cancel, 5)
-	tasks := engine.GenerateTasks(&responses) // Pass pointer to slice
+	tasks := utils.GenerateTasks(&responses) // Pass pointer to slice
 
 	time.Sleep(2 * time.Second)
 
