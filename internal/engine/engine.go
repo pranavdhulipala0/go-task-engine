@@ -2,10 +2,10 @@ package engine
 
 import (
 	"context"
-	"fmt"
 	"sync"
 
 	"github.com/google/uuid"
+	"github.com/sirupsen/logrus"
 )
 
 type TaskManager struct {
@@ -21,6 +21,9 @@ type TaskManager struct {
 }
 
 func NewTaskManager(ctx context.Context, cancel context.CancelFunc, workers int) *TaskManager {
+	// Configure logrus
+	logrus.SetFormatter(&logrus.JSONFormatter{})
+	logrus.SetLevel(logrus.InfoLevel)
 	tm := &TaskManager{
 		ctx:          ctx,
 		cancel:       cancel,
@@ -46,7 +49,10 @@ func (tm *TaskManager) Submit(task Task) string {
 	select {
 	case tm.TaskQueue <- task:
 		tm.AddTaskToQueue(task, tm.PendingTasks)
-		fmt.Println("✅ Submitted Task:", task.ID, "\nExecutionId:", task.ExecutionId)
+		logrus.WithFields(logrus.Fields{
+			"taskId":      task.ID,
+			"executionId": task.ExecutionId,
+		}).Info("✅ Task submitted successfully")
 		return task.ExecutionId
 	case <-tm.ctx.Done():
 		tm.TaskWg.Done()
@@ -60,11 +66,11 @@ func (tm *TaskManager) Cancel(ID string) string {
 
 	if _, exists := tm.PendingTasks[ID]; exists {
 		delete(tm.PendingTasks, ID) // remove from pending
-		fmt.Println("❌ Cancelled Task:", ID)
+		logrus.WithField("taskId", ID).Info("❌ Task cancelled successfully")
 		tm.TaskWg.Done() // mark as done to prevent deadlock
 		return "Cancelled Task"
 	}
-	fmt.Println("❌ Task not found or already executed:", ID)
+	logrus.WithField("taskId", ID).Warn("⚠️ Task not found or already executed")
 	return "Task not found or already executed"
 }
 
@@ -73,24 +79,24 @@ func (tm *TaskManager) Shutdown() {
 	close(tm.TaskQueue) // ⬅ then close channel to signal workers
 	tm.cancel()         // ⬅ cancel context (optional here)
 	tm.Wg.Wait()        // ⬅ wait for workers to exit
-	fmt.Println("🛑 Shutting down Task Manager...")
+	logrus.Info("🛑 Task Manager shutting down")
 }
 
 func (tm *TaskManager) Worker(ctx context.Context, workerId int, queue chan Task, wg *sync.WaitGroup) {
 	defer wg.Done()
-	fmt.Println("🚀 Worker:", workerId, "started")
+	logrus.WithField("workerId", workerId).Info("🚀 Worker started")
 
 	for {
 		select {
 		case task, ok := <-tm.TaskQueue:
 			if !ok {
-				fmt.Println("🔌 Channel closed, worker", workerId, "shutting down")
+				logrus.WithField("workerId", workerId).Info("🔌 Worker shutting down - channel closed")
 				return
 			}
 			tm.ExecuteTask(ctx, task, workerId)
 
 		case <-tm.ctx.Done():
-			fmt.Println("💤 Worker", workerId, "shutting down")
+			logrus.WithField("workerId", workerId).Info("💤 Worker shutting down - context cancelled")
 			return
 		}
 	}
@@ -133,9 +139,19 @@ func (tm *TaskManager) ExecuteTask(ctx context.Context, task Task, workerId int)
 					return
 				}
 				tm.AddTaskToQueue(task, tm.FailedTasks)
-				fmt.Println("🔥 WORKER:", workerId, " Task failed:", task.ID, "\nExecutionId:", task.ExecutionId, err)
+				logrus.WithFields(logrus.Fields{
+					"workerId":    workerId,
+					"taskId":      task.ID,
+					"executionId": task.ExecutionId,
+					"retries":     task.Retries,
+					"error":       err,
+				}).Error("🔥 Task failed")
 			} else {
-				fmt.Println("✅ WORKER:", workerId, " Task completed:", task.ID, "\nExecutionId:", task.ExecutionId)
+				logrus.WithFields(logrus.Fields{
+					"workerId":    workerId,
+					"taskId":      task.ID,
+					"executionId": task.ExecutionId,
+				}).Info("✅ Task completed successfully")
 			}
 
 		case <-taskCtx.Done():
@@ -145,14 +161,23 @@ func (tm *TaskManager) ExecuteTask(ctx context.Context, task Task, workerId int)
 				return
 			}
 			tm.AddTaskToQueue(task, tm.FailedTasks)
-			fmt.Println("⏰ WORKER:", workerId, " Task timed out:", task.ID, "ExecutionId:", task.ExecutionId)
+			logrus.WithFields(logrus.Fields{
+				"workerId":    workerId,
+				"taskId":      task.ID,
+				"executionId": task.ExecutionId,
+				"retries":     task.Retries,
+			}).Warn("⏰ Task timed out")
 		}
 	})
 }
 
 func (tm *TaskManager) RetryTask(task Task) {
 	task.Retries++
-	fmt.Println("😩 Retrying task:", task.ID, "for the", task.Retries, "time")
+	logrus.WithFields(logrus.Fields{
+		"taskId":     task.ID,
+		"retryCount": task.Retries,
+		"maxRetries": task.MaxRetries,
+	}).Info("😩 Retrying task")
 	tm.Submit(task) // This will get a NEW ExecutionId
 }
 
