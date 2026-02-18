@@ -29,7 +29,7 @@ func NewTaskManager(ctx context.Context, cancel context.CancelFunc, workers int)
 	tm := &TaskManager{
 		ctx:          ctx,
 		cancel:       cancel,
-		TaskQueue:    make(chan models.Task),
+		TaskQueue:    make(chan models.Task, 100),
 		PendingTasks: make(map[string]models.Task),
 		FailedTasks:  make(map[string]models.Task),
 		Mu:           sync.RWMutex{},
@@ -47,19 +47,15 @@ func (tm *TaskManager) Submit(task models.Task) string {
 	// Generate ExecutionId before sending to channel
 	task.ExecutionId = uuid.New().String()
 
-	tm.TaskWg.Add(1) // increment BEFORE sending
-	select {
-	case tm.TaskQueue <- task:
-		tm.AddTaskToQueue(task, tm.PendingTasks)
-		logrus.WithFields(logrus.Fields{
-			"taskId":      task.ID,
-			"executionId": task.ExecutionId,
-		}).Info("✅ Task submitted successfully")
-		return task.ExecutionId
-	case <-tm.ctx.Done():
-		tm.TaskWg.Done()
-		return "Task manager is shutting down"
+	tm.Mu.Lock()
+	if _, exists := tm.PendingTasks[task.ID]; !exists {
+		tm.TaskWg.Add(1) // only once per job
+		tm.PendingTasks[task.ID] = task
 	}
+	tm.Mu.Unlock()
+
+	tm.TaskQueue <- task
+	return task.ExecutionId
 }
 
 func (tm *TaskManager) Cancel(ID string) string {
@@ -105,14 +101,14 @@ func (tm *TaskManager) Worker(ctx context.Context, workerId int, queue chan mode
 }
 
 func (tm *TaskManager) ExecuteTask(ctx context.Context, task models.Task, workerId int) {
-	//Mark this task as done at the end of this execution
-	defer tm.TaskWg.Done()
-
 	// Use sync.Once to ensure each task ExecutionId executes only once
 	once, _ := tm.executingTasks.LoadOrStore(task.ExecutionId, &sync.Once{})
 	taskOnce := once.(*sync.Once) //This is a type assertion from any to sync.Once
 
 	taskOnce.Do(func() {
+		//Mark this task as done at the end of this execution
+		defer tm.TaskWg.Done()
+		defer tm.executingTasks.Delete(task.ExecutionId)
 		// Remove task from pending tasks
 		tm.Mu.Lock()
 		delete(tm.PendingTasks, task.ID)
