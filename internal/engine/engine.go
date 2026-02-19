@@ -46,6 +46,7 @@ func NewTaskManager(ctx context.Context, cancel context.CancelFunc, workers int)
 func (tm *TaskManager) Submit(task models.Task) string {
 	// Generate ExecutionId before sending to channel
 	task.ExecutionId = uuid.New().String()
+	task.State = models.StatePending
 
 	tm.Mu.Lock()
 	if _, exists := tm.PendingTasks[task.ID]; !exists {
@@ -111,6 +112,7 @@ func (tm *TaskManager) ExecuteTask(ctx context.Context, task models.Task, worker
 		defer tm.executingTasks.Delete(task.ExecutionId)
 		// Remove task from pending tasks
 		tm.Mu.Lock()
+		task.State = models.StateInProgress
 		delete(tm.PendingTasks, task.ID)
 		tm.Mu.Unlock()
 
@@ -132,11 +134,13 @@ func (tm *TaskManager) ExecuteTask(ctx context.Context, task models.Task, worker
 			if err != nil {
 				//Retry the Task if it has not reached the max retries
 				if task.Retries < task.MaxRetries {
-					task.Retries++
-					tm.Submit(task)
+					tm.RetryTask(task)
 					return
 				}
 				tm.AddTaskToQueue(task, tm.FailedTasks)
+				tm.Mu.Lock()
+				task.State = models.StateFailed
+				tm.Mu.Unlock()
 				logrus.WithFields(logrus.Fields{
 					"workerId":    workerId,
 					"taskId":      task.ID,
@@ -145,6 +149,9 @@ func (tm *TaskManager) ExecuteTask(ctx context.Context, task models.Task, worker
 					"error":       err,
 				}).Error("🔥 Task failed")
 			} else {
+				tm.Mu.Lock()
+				task.State = models.StateCompleted
+				tm.Mu.Unlock()
 				logrus.WithFields(logrus.Fields{
 					"workerId":    workerId,
 					"taskId":      task.ID,
@@ -159,6 +166,9 @@ func (tm *TaskManager) ExecuteTask(ctx context.Context, task models.Task, worker
 				return
 			}
 			tm.AddTaskToQueue(task, tm.FailedTasks)
+			tm.Mu.Lock()
+			task.State = models.StateFailed
+			tm.Mu.Unlock()
 			logrus.WithFields(logrus.Fields{
 				"workerId":    workerId,
 				"taskId":      task.ID,

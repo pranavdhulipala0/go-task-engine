@@ -12,4 +12,15 @@ type Task struct {
 	Retries     int
 	MaxRetries  int
 	ExecutionId string
+	State       TaskState
 }
+
+type TaskState string
+
+const (
+	StatePending    TaskState = "PENDING"
+	StateInProgress TaskState = "IN_PROGRESS"
+	StateCompleted  TaskState = "COMPLETED"
+	StateFailed     TaskState = "FAILED"
+	StateCancelled  TaskState = "CANCELLED"
+)
