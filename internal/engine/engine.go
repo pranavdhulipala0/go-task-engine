@@ -1,8 +1,10 @@
 package engine
 
 import (
+	"container/heap"
 	"context"
 	"sync"
+	"time"
 
 	"github.com/google/uuid"
 	"github.com/sirupsen/logrus"
@@ -20,6 +22,9 @@ type TaskManager struct {
 	FailedTasks    map[string]models.Task
 	Mu             sync.RWMutex
 	executingTasks sync.Map // map[string]*sync.Once
+	pq             PriorityQueue
+	pqMutex        sync.Mutex
+	pqCond         *sync.Cond
 }
 
 func NewTaskManager(ctx context.Context, cancel context.CancelFunc, workers int) *TaskManager {
@@ -33,7 +38,14 @@ func NewTaskManager(ctx context.Context, cancel context.CancelFunc, workers int)
 		PendingTasks: make(map[string]models.Task),
 		FailedTasks:  make(map[string]models.Task),
 		Mu:           sync.RWMutex{},
+		pq:           make(PriorityQueue, 0),
 	}
+
+	tm.pqCond = sync.NewCond(&tm.pqMutex)
+	heap.Init(&tm.pq)
+
+	// Start dispatcher
+	go tm.dispatcher()
 
 	for i := 0; i < workers; i++ {
 		tm.Wg.Add(1)
@@ -41,6 +53,29 @@ func NewTaskManager(ctx context.Context, cancel context.CancelFunc, workers int)
 	}
 
 	return tm
+}
+
+func (tm *TaskManager) dispatcher() {
+	for {
+		tm.pqMutex.Lock()
+
+		for tm.pq.Len() == 0 {
+			tm.pqCond.Wait()
+		}
+
+		task := heap.Pop(&tm.pq).(models.Task)
+		// fmt.Printf("Dispatcher: Popping task %s with priority %d from queue\n", task.ID, task.Priority)
+		tm.pqMutex.Unlock()
+
+		select {
+		case tm.TaskQueue <- task:
+			//This adds to the TaskQueue and the worker picks it up.
+			//Do nothing, keep executing.
+		case <-tm.ctx.Done():
+			//On context end, end the dispatcher.
+			return
+		}
+	}
 }
 
 func (tm *TaskManager) Submit(task models.Task) string {
@@ -55,7 +90,12 @@ func (tm *TaskManager) Submit(task models.Task) string {
 	}
 	tm.Mu.Unlock()
 
-	tm.TaskQueue <- task
+	task.CreatedAt = time.Now()
+
+	tm.pqMutex.Lock()
+	heap.Push(&tm.pq, task)
+	tm.pqCond.Signal()
+	tm.pqMutex.Unlock()
 	return task.ExecutionId
 }
 
@@ -125,6 +165,7 @@ func (tm *TaskManager) ExecuteTask(ctx context.Context, task models.Task, worker
 
 		//Run the function in a Go Routine
 		go func() {
+			// fmt.Println("Worker", workerId, "Executing task:", task.ID, "with priority:", task.Priority)
 			done <- task.Execute(taskCtx)
 		}()
 

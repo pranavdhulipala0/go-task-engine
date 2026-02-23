@@ -11,7 +11,7 @@ import (
 
 func main() {
 	fmt.Println("Task engine starting...")
-	time.Sleep(2 * time.Second)
+	time.Sleep(1 * time.Second)
 	startTime := time.Now()
 	ctx, cancel := context.WithCancel(context.Background())
 	responses := make([]string, 0)

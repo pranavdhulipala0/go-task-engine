@@ -19,8 +19,9 @@ func GenerateTasks(responses *[]string) []models.Task {
 			Duration:   5 * time.Second,
 			Retries:    0,
 			MaxRetries: 3,
+			Priority:   1,
 			Execute: func(ctx context.Context) error {
-				time.Sleep(1000 * time.Second)
+				time.Sleep(500 * time.Millisecond)
 				return nil
 			},
 		},
@@ -29,6 +30,7 @@ func GenerateTasks(responses *[]string) []models.Task {
 			Duration:   3 * time.Second,
 			Retries:    0,
 			MaxRetries: 3,
+			Priority:   10,
 			Execute: func(ctx context.Context) error {
 				req, err := http.NewRequestWithContext(
 					ctx,
@@ -59,6 +61,7 @@ func GenerateTasks(responses *[]string) []models.Task {
 			Duration:   10 * time.Second,
 			Retries:    0,
 			MaxRetries: 3,
+			Priority:   5,
 			Execute: func(ctx context.Context) error {
 				req, err := http.NewRequestWithContext(
 					ctx,
@@ -89,6 +92,7 @@ func GenerateTasks(responses *[]string) []models.Task {
 			Duration:   4 * time.Second,
 			Retries:    0,
 			MaxRetries: 3,
+			Priority:   8,
 			Execute: func(ctx context.Context) error {
 				req, err := http.NewRequestWithContext(
 					ctx,
@@ -119,6 +123,7 @@ func GenerateTasks(responses *[]string) []models.Task {
 			Duration:   4 * time.Second,
 			Retries:    0,
 			MaxRetries: 3,
+			Priority:   2,
 			Execute: func(ctx context.Context) error {
 				req, err := http.NewRequestWithContext(
 					ctx,
@@ -149,6 +154,7 @@ func GenerateTasks(responses *[]string) []models.Task {
 			Duration:   4 * time.Second,
 			Retries:    0,
 			MaxRetries: 3,
+			Priority:   9,
 			Execute: func(ctx context.Context) error {
 				req, err := http.NewRequestWithContext(
 					ctx,
@@ -179,6 +185,7 @@ func GenerateTasks(responses *[]string) []models.Task {
 			Duration:   4 * time.Second,
 			Retries:    0,
 			MaxRetries: 3,
+			Priority:   3,
 			Execute: func(ctx context.Context) error {
 				req, err := http.NewRequestWithContext(
 					ctx,
@@ -209,6 +216,7 @@ func GenerateTasks(responses *[]string) []models.Task {
 			Duration:   4 * time.Second,
 			Retries:    0,
 			MaxRetries: 3,
+			Priority:   7,
 			Execute: func(ctx context.Context) error {
 				req, err := http.NewRequestWithContext(
 					ctx,
@@ -239,6 +247,7 @@ func GenerateTasks(responses *[]string) []models.Task {
 			Duration:   4 * time.Second,
 			Retries:    0,
 			MaxRetries: 3,
+			Priority:   4,
 			Execute: func(ctx context.Context) error {
 				req, err := http.NewRequestWithContext(
 					ctx,
@@ -269,6 +278,7 @@ func GenerateTasks(responses *[]string) []models.Task {
 			Duration:   4 * time.Second,
 			Retries:    0,
 			MaxRetries: 3,
+			Priority:   6,
 			Execute: func(ctx context.Context) error {
 				req, err := http.NewRequestWithContext(
 					ctx,
@@ -299,6 +309,7 @@ func GenerateTasks(responses *[]string) []models.Task {
 			Duration:   4 * time.Second,
 			Retries:    0,
 			MaxRetries: 3,
+			Priority:   1,
 			Execute: func(ctx context.Context) error {
 				req, err := http.NewRequestWithContext(
 					ctx,
@@ -329,6 +340,7 @@ func GenerateTasks(responses *[]string) []models.Task {
 			Duration:   4 * time.Second,
 			Retries:    0,
 			MaxRetries: 3,
+			Priority:   10,
 			Execute: func(ctx context.Context) error {
 				req, err := http.NewRequestWithContext(
 					ctx,

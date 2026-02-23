@@ -13,6 +13,8 @@ type Task struct {
 	MaxRetries  int
 	ExecutionId string
 	State       TaskState
+	Priority    int
+	CreatedAt   time.Time
 }
 
 type TaskState string
